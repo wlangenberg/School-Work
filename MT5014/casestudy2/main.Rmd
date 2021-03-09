@@ -1,0 +1,143 @@
+---
+title: "The swedish housing market"
+author: "Willie Langenberg"
+date: '2021-02-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+library(plm)
+library(corrplot)
+```
+
+## Abstract
+
+
+
+
+## Introduction
+
+The housing market vary a lot across different parts of a country. The houses being sold does not only differ size and design but also in pricing. I want to analyse and try to explain the general pricing of houses being sold in different counties in Sweden. With data containing information about the salary and population density in a given country, I will try to build a model for explaining the price difference of houses being sold in Sweden. 
+
+
+
+## Data
+```{r, echo=FALSE}
+# read in and clean house price data
+house_df <- read_csv("data/houseprices.csv",  locale = locale(encoding = "latin1"), col_types = cols())
+house_df <- house_df %>%
+  pivot_longer(-(1:2), names_to="year", values_to="y") %>%
+  select(y, region, year)
+
+# read in and clean salary data
+salary_df <- read_csv("data/salary.csv", locale = locale(encoding = "latin1"), skip=2, col_types = cols())
+salary_df <- salary_df %>%
+  pivot_longer(-(1:4), names_to="year", values_to="salary") %>%
+  select(salary, region, year)
+
+# read in and clean population density data
+popdensity_df <- read_csv("data/popdensity.csv", locale = locale(encoding = "latin1"), skip=2, col_types = cols()) 
+popdensity_df <- popdensity_df %>%
+  pivot_longer(-(1:2), names_to="year", values_to="pop_density") %>%
+  select(pop_density, region, year)
+
+# read in and clean population data
+pop_df <- read_csv("data/population.csv", locale = locale(encoding = "latin1"), skip=2, col_types = cols()) 
+pop_df <- pop_df %>%
+  pivot_longer(-(1:2), names_to="year", values_to="population") %>%
+  select(population, region, year)
+
+
+#combine all data
+df <- house_df %>% 
+  inner_join(salary_df, by=c("year", "region")) %>%
+  inner_join(popdensity_df, by=c("year", "region")) %>%
+  inner_join(pop_df, by=c("year", "region"))
+
+```
+
+The data is downloaded from Statistics Sweden (scb.se). The response variable is the mean price of small houses being sold in a given year.  
+
+## Analysis
+```{r}
+# Korrelationsplot 
+corr_matrix <- cor(select(df, -region, -year))
+corrplot(corr_matrix, type = "upper")
+```
+
+
+```{r}
+# pairwise plots
+df %>%
+  mutate(y = 1000*y) %>%
+  select(-year) %>%
+  group_by(region) %>%
+  pivot_longer(-(1:2), values_to = "x") %>%
+  ggplot(aes(x = x, y = y, color=region)) +
+  geom_point() + scale_y_log10() +
+  facet_wrap(~name, scales = "free_x")
+```
+
+
+```{r}
+# Ols regression
+ols <- lm(y ~ salary + pop_density, data = df)
+summary(ols)
+```
+
+
+```{r}
+# fixed effects using least squares dummy variable model
+fixed.dum <- lm(y ~ salary + pop_density + factor(region) - 1, data = df)
+summary(fixed.dum)
+```
+
+
+```{r}
+index <- sample(1:nrow(df), round(0.75 * nrow(df)))
+train <- df[index, ]
+test <- df[-index, ]
+
+fixed_train <- lm(y ~ salary + pop_density + factor(region) - 1, data = train)
+summary(fixed.dum)
+
+pred.fix_lm <- predict(fixed_train, test)
+
+### Plot Prediktion vs observerade värden
+plot(pred.fix_lm, test$y, ylab="True values", xlab="Predicted values")
+abline(0,1)
+```
+
+
+```{r}
+# fixed effects
+fixed <- plm(y ~ salary + pop_density, data = df, index=c("region", "year"), model="within" )
+summary(fixed)
+
+fixef(fixed)
+
+pFtest(fixed, ols)
+```
+
+
+```{r}
+# random effects
+random <- plm(y ~ salary + pop_density, data = df, index=c("region", "year"), model="random" )
+summary(random)
+
+
+# Hausman test, fixed or random?
+phtest(fixed, random)
+
+
+# The p-value < 0.05 and we can therefore reject the null hypothesis that the random effects model is preferable over the fixed effects model.
+```
+
+
+# How should we now continue to analyze the data in a manner which ignores the time-dependence?
+
+
+
