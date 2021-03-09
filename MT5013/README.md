@@ -7,6 +7,6 @@
 - [Homework 4:](Homework/HW4/HW4.md) SQL and 6th graders.
 - [Homework 5:](Homework/HW5/HW5.md) Nobel Tweets.
 - [Homework 6:](Homework/HW6/HW6.md) Nobel prize winning project.
-- [Project:](Project/README.md) Basic sentiment analysis done on the NVIDIA stock.
+- [Project:](Project/Report/report.md) Basic sentiment analysis of a stock.
 
-(Some Latex text is not being displayed properly)
+(Some Latex text might not be displayed properly)
