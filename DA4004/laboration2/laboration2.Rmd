@@ -1,0 +1,95 @@
+---
+title: "Projekt 2"
+author: "Adam Goran & Willie Langenberg"
+date: '2021-03-02'
+output: 
+  github_document: default
+---
+
+
+
+```{r, include=FALSE}
+library(tidyverse)
+library(mclust)
+library(ANN2)
+```
+
+```{r}
+df <- iris[, 1:4]
+```
+
+
+# Uppgift 1
+## a)
+Principalkomponenter är en sekvens av inbördes okorrelerade projektioner av data ordnade efter varians. Sådanna dyker upp i ridge regression exempelvis. Principalkomponentanalys transformerar dimensionerna av data så att de blir ortogonala, vilket innebär att de varierar mest i den nya riktningen och möjliggör att ordna dimensionerna efter varians. Då kan man välja ut så många dimensioner som krävs för att förklara det mesta av variationen i data. Mer formellt går det i detta fall ut på att vi har data $x_n \in R^D$ som vi vill projicera till ett underrum med $M < D$ dimensioner där variansen i projicerad data ska maximeras. Definiera $S = \frac{1}{N}\sum^N_{n=1} (x_n - \bar{x})(x_n - \bar{x})^T$ till att vara kovariansmatrisen så att variansen av projicerad data ges av $u_1^TSu_1$. Om vi väljer $M=1$ så maximeras variansen av att den egenvektor med störst egenvärde väljs. Den vektor kallas den första principalkomponenten. Normalisering påverkar analysen på så sätt alla variabler får samma vikt när räkningarna utförs. Annars brukar det vara så att variabler som antar större värden varierar mer i absoluta mått, men inte i relativa.
+
+## b)
+
+Vi utför PCA på centrerad men icke-normaliserad data och får följande utskrift. 
+
+```{r}
+(irisPCA <- princomp(df))
+```
+
+Vi ser att den första principalkomponenten förklarar ungefär 69% av variationen i data. 
+
+## c)
+
+En plot skapas där de två första principalkomponenterna jämförs. Vi färglägger även arterna för att kunna evaluera hur bra metoden har fungerat.
+
+```{r, fig.cap="Figur 4.1: De två första principalkomponenterna plottade mot varandra"}
+irisPCA$scores[, 1:2] %>%
+  as_tibble() %>%
+  bind_cols(species = iris$Species) %>%
+  ggplot(aes(Comp.1, Comp.2, colour = species)) +
+    geom_point() 
+```
+
+Vi ser i figur 4.1 att arten setosa tydligt urskiljer sig från de andra. Metoden har skapat tre kluster, även om det linjärt inte går att separera det gröna från det blåa. Vi ser även att den första principalkomponenten antar större och mindre värden än den andra. 
+
+# Uppgift 2
+
+## a)
+
+Idén med autoencoders är att använda neurala nätverk för att kopiera en input på en output, det vill säga, neurala nätverk som ger själva inputvariablerna som output. Man kan uppnå dimension reduktion genom att använda ett gömt lager med färre noder än dimensionen av input. Nätverket försöker sedan att optimera vikterna så att rekonstruktionsfelet blir som lägst. Med extra gömda lager kan man uppnå icke-linjär reduktion av dimensioner. 
+
+## b)
+
+Vi testar en modell med tre gömda lager och 3, 2 respektive 3 noder då vi vill reducera data till två dimensioner. 
+
+```{r}
+set.seed(9907)
+X <- as.matrix(df)
+irisAE <- autoencoder(X, c(3, 2, 3), val.prop = 0, verbose = FALSE)
+```
+
+Här används tanh som aktiveringsfunktion och nätverket minimerar kvadratfelet. Data standardiserades även innan träning. I funktionen anger vi att felet endast ska spåras på träningsdata. 
+
+## c)
+
+Vi visualiserar resulatet på samma sätt som i 4 c). 
+
+```{r, fig.cap="Figur 5.1: Visualisering av data i två dimensioner efter användning av autoencoder."}
+set.seed(9907)
+as_tibble(encode(irisAE, X)) %>%
+  bind_cols(species = iris$Species) %>%
+  ggplot(aes(node_1, node_2, colour = species)) +
+    geom_point()
+```
+
+## d)
+
+I figur 5.1 ser vi att arten setosa tydligt urskiljer ett kluster, likt i figur 4.1. De andra två arterna separeras på ett tillfredsställande sätt, även om några enstaka punkter ser ut att fillhöra fel kluster. 
+
+## e)
+
+PCA och autoencoders är identiska om de gömda noderna har linjära aktiveringsfunktioner, eller om nätverket bara har ett gömt lager. Den största skillnaden är således att autoencoders är kapabla till att använda icke-linjära metoder. Detta innebär att PCA i regel går snabbare att utföra. 
+
+
+
+
+
+
+
+
+

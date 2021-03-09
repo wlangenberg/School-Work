@@ -4,3 +4,5 @@ A handful of different assignments and reports of which I solved during my time 
 - [MT5013:](/MT5013/README.md) Statistical Data Processing - Data processing and visualization done in different assignments.
 
 - [MT5014:](/MT5014/README.md) Econometric Methods - Analysis done on panel-, cross-sectional- and financial time series data. 
+
+- [DA4004:](/DA4004/README.md) Introduction to machine learning - Practical problems being solved with supervised- and unsupervised learning.
