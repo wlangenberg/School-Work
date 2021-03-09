@@ -1,5 +1,5 @@
 # School-Work
-A handful of different assignments and reports of which I solve problems during my time on the bachelor's program in mathematical statistics.
+A handful of different assignments and reports of which I solved during my time on the bachelor's program in mathematical statistics.
 
 - [MT5013:](/MT5013/README.md) Statistical Data Processing - Data processing and visualization done in different assignments.
 
