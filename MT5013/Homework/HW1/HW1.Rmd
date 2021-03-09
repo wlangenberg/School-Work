@@ -1,0 +1,30 @@
+---
+title: "HW1"
+author: "Willie Langenberg"
+date: '2020-11-02'
+output: github_document
+---
+
+
+## Past experiences
+In past courses in mathematical statistics, we have always used R for writing the reports. With that said, I am somewhat familiar with the syntax in R, R Studio and R markdown. I have also used some "ggplot2", to plot nice looking graphics. However I have never used Git, Github or dplyr before.
+
+
+## Data Example
+Today the temperature felt unusually warm (14°C) for a november day in Stockholm. I figured I wanted to see some historical data for the temperature at this time of the year (2nd day of November). I simply used Google to search for "temperature dataset in sweden" and found "https://bolin.su.se/data/stockholm-thematic/air_temperature.php". It is a centre for climate research with open access datasets. On the website I chose to download data for the homogenized daily mean temperatures. The data came in the format of a textfile with tabseperated columns. To read it into R I used the function "read.table", which creates a dataframe to store the data in. The plot in _Figure.1_ below shows the historical mean temperature of every 2th of November day, from 1756 to 2005.
+```{r, fig.cap="Plot that shows the mean temperature of each 2nd of November day, from 1756 to 2005."}
+library(ggplot2)
+df <-  read.table("daily_temp.txt")
+df <- df[c(1, 2, 3, 6)]
+names(df) <- c("Year", "Month", "Day", "Temperature")
+new_df <- subset(df, df[2]==11 & df[3]==2)
+
+ggplot(new_df, aes(Year, Temperature)) + geom_point()
+```
+
+_Figure 1:_ Plot that shows the mean temperature of each 2nd of November day, from 1756 to 2005.
+```{r}
+sessionInfo()
+```
+
+
