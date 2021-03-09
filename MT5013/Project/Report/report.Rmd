@@ -1,0 +1,284 @@
+---
+title: "Sentiment analys av en aktie"
+author: "Willie Langenberg"
+date: 2021-01-15
+output:
+  github_document
+
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+library(httr)
+library(tidyquant)
+library(knitr)
+
+#DISPLAY MESSAGE WITH MESSAGE ID
+#https://stocktwits.com/message/<INSERT ID>
+```
+
+## Introduktion 
+
+### Inledning
+
+När det gäller aktieanalys, finns det ett hav av olika indikatorer. Jag har och är fortfarande intresserad av att hitta nya sätt att förutspå en aktiekurs. Vi blev introducerad till sentiment analys i en hemläxa i kursen MT5013. Detta väckte direkt frågan hos mig, kan detta vara applicerbart någon annanstans, på aktiemarkanden kanske? Mitt mål med denna rapport är att se huruvida sentiment påverkar en aktiekurs. Logiskt sett borde det finnas ett samband, vilket även flera vetenskapliga rapporter har undersökt. En sökning på "sentiment analysis stock market" via Google Scholar ger 470 000 resultat.
+
+### Metod
+
+Jag har valt att använda data från Stocktwits, som kan jämföras som ett twitter för aktier. För varje aktie, index etc. finns ett feed där folk kan kommentera vad det tycker om aktien. Mitt mål är då att undersöka vad sentimentet av varje meddelande är och jämföra med aktiekursen, för att se om det finns ett samband över tid. Datan från Stocktwits hämtar jag med hjälp av deras API. I dokumentationen angav de några begränsningar som skapade lite problem. Vid varje förfrågan eller "Get" gavs endast 30 meddelanden tillbaka och jag fick endast skicka 200 förfrågningar i timmen. Jag ville ha data för åtminstone ett halvår tillbaka vilket innebar att jag behövde skicka ungefär 1733 förfrågningar vilket gav 52000 meddelanden. För att följa de givna begränsningarna skrev jag en funktion som skickar 50 förfrågningar och sedan väntar i 15min för att sedan upprepa, tills den skickat ett angivet antal förfrågningar. För att värdera sentimentet av ett meddelande kommer jag använda en "ordbok"[1] som anger ett "market sentiment" för 8,331 antal ord. Sentimentvärdet av ett meddelande betraktar jag då som summan av värdet på alla enskilda ord. Att hämta aktie prisdatan var avsevärt lättare. Jag använde ett paket som heter "tidyquant" där jag med hjälp av funktionen "tq_get" kunde hämta data för en given aktie, start- och stopdatum. 
+
+## Data
+
+Målet med analysen är att se om vi kan hitta några samband mellan sentimentet i meddelanden om en aktie, och dess pris. För att begränsa datan något behöver jag välja en aktie som är lite obekant i jämförelse med exempelvis Google eller Apple. Jag väljer att betrakta aktien NVIDIA, ett elektronikföretag som främst tillverkar grafikkort. Vi börjar med att hämta data för meddelanden. Detta gör vi som sagt med deras API. Nedan skriver och använder jag en funktion för att hämta all data och samtidigt vara inom ramarna för begränsningarna. 
+
+```{r}
+#Funktion för att hämta data från Stocktwits. 
+#symbol,  anger en "börssymbol", unik för varje aktie.
+#n,       anger hur många förfrågningar som ska göras
+#add,     anger ett alternativ för att kunna hämta data från och med ett angivet datum. 
+get_stocktwits <- function(symbol, n, add="") {
+  url <- str_c("https://api.stocktwits.com/api/2/streams/symbol/", symbol, ".json")
+  first_response <- fromJSON(str_c(url,add))
+  container <- first_response[[4]]
+  counter <- 1
+  while(counter <= n){
+    min_id <- min(container$id)
+    if(counter %% 50 == 0) {
+      print(str_c(counter, "/", n)); flush.console()
+      Sys.sleep(920)
+    }
+    
+    new_response <- GET(str_c(url, "?max=", min_id))
+    status <- new_response$status_code
+    
+    if (status != 200){
+      print(str_c("Error! Only downloaded:", counter, "/", n, ", Status code:", status))
+      return(container)
+      }
+    
+    new_contain <- fromJSON(content(new_response, as = "text"))
+    container <- container %>% bind_rows(new_contain$messages)
+    counter <- counter + 1
+    error <- 0
+  }
+  print(counter)
+  return(container)
+  }
+```
+
+Jag har använt funktionen och hämtat all data i förväg, då det tog ungefär 9 timmar allt som allt. Nedan har jag visast hur jag använde funktionen "get_stocktwits" tre separata gånger. Första användningen med $n = 1200$ gav endast data från och med 2020-08-19, vilket betydde att jag behövde använda funktionen igen, och sedan en sista gång. Funktionen är inte perfekt, jag hade exempelvis kunnat använda ett stopdatum som argument istället för "n", men denna lösning fungerade också. 
+
+```{r}
+#Här använder vi funktionen get_stocktwits som jag skrivit för att hämta all data.
+#Jag insåg här att det hade varit bättre om det istället för argumentet "n" fanns ett argument som 
+#angav stopdatum så den automatiskt hämtar all data till och med en given dag tillbaka i tiden. 
+
+#symbol <- "NVDA"
+
+#Data from 1200*30 messages back in time from now
+#stock_df <- get_stocktwits(symbol, 1200)
+#print(min(stock_df$created_at))
+
+#Data from 201*30 messages back in time from last observation above
+#last_obs_id <- min(stock_df$id)
+#stock_df_2 <- get_stocktwits(symbol, 201, str_c("?max=", last_obs_id))
+#print(min(stock_df_2$created_at))
+
+#Data from 350*30 messages back in time from last observation above
+#last_obs_id_2 <- min(stock_df_2$id)
+#stock_df_3 <- get_stocktwits(symbol, 350, str_c("?max=", last_obs_id_2))
+#print(min(stock_df_3$created_at))
+
+#save(stock_df, file = str_c(symbol, "_data.RData"))
+#save(stock_df_2, file = str_c(symbol, "_data_2.RData"))
+#save(stock_df_3, file = str_c("data/", symbol, "_data_3.RData"))
+```
+
+Jag läser nu in den sparade datan, samt ordlistan[1] som anger dess marknadssentiment. 
+
+```{r}
+#Laddar den sparade stocktwits datan
+load("../data/NVDA_data_1.RData")
+load("../data/NVDA_data_2.RData")
+load("../data/NVDA_data_3.RData")
+stock_df_raw <- stock_df %>%
+  bind_rows(stock_df_2, stock_df_3) %>%
+  select(id, word = body, created_at) %>%
+  mutate(date = str_split(created_at, "T", simplify = TRUE)[,1]) %>%
+  arrange(id)
+
+#Läser in sentiment ordlistan
+# NTUSD-Fin: A Market Sentiment Dictionary for Financial Social Media Data Applications
+# http://nlg.csie.ntu.edu.tw/nlpresource/NTUSD-Fin/
+sent_df_raw <- fromJSON("../data/NTUSD_Fin_word_v1.0.json")
+sent_df <- sent_df_raw %>%
+  select(word = token, sentiment = market_sentiment)
+
+sent_df %>%
+  slice(1:5) %>%
+  kable()
+```
+__Tabell 1:__ Ordlista som anger sentimentvärdet för ett urval av ord. 
+
+Vi går vidare genom att beräkna sentiment värdet för varje meddelande i den sammansatta dataframen "stock_df_raw". Detta sparar vi som "stock_df_avgmessage" där då sentimentet beräknas som summan av sentimentvärdet för varje ord. Notera att endast ord som finns i både dataframen "stock_df_raw" och "sent_df" betraktas. Se tabell 2 som visar tabellens utseende. 
+
+```{r}
+# Using the dictionary (sent_df) to calculate sentiment of messages (stock_df)
+
+stock_df_avgmessage <- stock_df_raw %>%
+  mutate(date = as.Date(date)) %>%
+  separate_rows(word) %>%
+  mutate(word = str_to_lower(word, locale = "en")) %>%
+  mutate(word = str_remove(word, pattern = "[[:punct:]]")) %>%
+  inner_join(sent_df, by=c("word" = "word")) %>%
+  group_by(id, created_at, date) %>%
+  summarize(AverageSentiment = mean(sentiment), .groups = 'drop')
+
+stock_df_avgmessage %>%
+  select(-created_at) %>%
+  slice(1:5) %>%
+  kable()
+```
+
+__Tabell 2:__ Sentiment värdet för varje meddelande.
+
+Med varje meddelandes respektive id kan vi även visa hela inlägget i stocktwits genom att gå in på länken "https://stocktwits.com/message/<ID>". Från dataframen som innehåller sentiment för varje meddelande kan vi visa de meddelanden som har bland de hösta och minsta värdena. Exempel på meddelanden med särskilt negativa sentiment är 
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/268804819)](../data/scrshot/pic_1.png)
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/253566258)](../data/scrshot/pic_2.png)
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/226427502)](../data/scrshot/pic_3.png)
+
+På samma sätt kan vi illustrera några meddelanden med särskilt positiva sentiment. 
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/237686104)](../data/scrshot/pic_4.png)
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/251538781)](../data/scrshot/pic_5.png)
+
+![Tagen från: [Stocktwits](https://stocktwits.com/message/224779107)](../data/scrshot/pic_6.png)
+
+Notera att den sista kommentaren faktiskt är negativ men ändå har ett positivt sentiment utifrån våra beräkningar. Detta är inte ett unikt fall utan jag upptäckte även att några andra texter var felberäknade. Vi får dock anta att majoriteten av alla sentiment reflekterar dess sanna värde någorlunda bra. 
+
+Vi beräknar nu medelvärdet av sentimentet för varje dag. Vi kan därefter plotta detta, vilket direkt ger oss en inblick i hur sentimentet ändras över tid.
+
+```{r, echo = FALSE}
+stock_df <- stock_df_avgmessage %>%
+  group_by(date) %>%
+  summarize(AverageSentiment = mean(AverageSentiment), .groups = 'drop')
+
+stock_df %>%
+  ggplot(aes(x = date, y = AverageSentiment)) + geom_line() + geom_smooth(se = FALSE) +
+  labs(title="Sentiment", y="Sentimentvärde", x="Datum")
+```
+
+__Figur 1:__ Plot för sentimentet över tid. 
+
+Om vi betraktar plotten som visas i figur 1 verkar det som att alla sentiment värden är positiva. Vi ser även med hjälp av den assisterande medelvärdes linjen visar någon svag tendens till en uppgång av sentiment i början av intervallet och sedan en nedgång. Angående att vi bara har positiva värden beror nog på att de flesta ord i ordlistan "sent_df" har ett positivt sentiment. När vi då summerar värden för flera ord kommer de då oftast bli positiva kan man tänka sig. Detta illustreras med tabell 3 nedan, som visar att hela $80\%$ har positivt sentiment. Givetvis kan alla de positiva meddelandena även bero på att det har varit en generellt positiv syn på aktien, men det är orealistikt att det inte finns en negativ dag på ett halvårstid.  
+
+```{r, echo= FALSE}
+sent_df %>%
+  summarize(`Sentiment > 0` = sum(sentiment > 0), `Sentiment < 0` = sum(sentiment < 0)) %>%
+  prop.table() %>%
+  kable()
+```
+
+__Tabell 3:__ Andel ord med positivt och negativt sentiment
+
+Vi hämtar nu prisdatan för aktien. För att göra detta använder jag funktionen "tq_get" från tidyquant. Vi hämtar data för hela perioden som vi beräknat sentiment för. 
+
+```{r, echo=FALSE}
+#We use the function "tq_get" from tidyquant to retrieve stock price data.
+stock_prices <- tq_get('NVDA',
+               from = min(stock_df$date),
+               to = max(stock_df$date),
+               get = "stock.prices")
+
+stock_prices %>%
+  slice(1:10) %>%
+  kable()
+```
+
+__Tabell 4:__ Första 10 observationerna av aktiedata för NVIDIA under perioden (`r min(stock_df$date)` - `r max(stock_df$date)`).
+
+De flesta variabler är uppenbara. De anger volym, min-, max-, öppnings- samt slutpris för en aktie under den givna dagen. Den sista kolumnen "adjusted" anger slutpriset som kort sagt är justerat för eventuella aktiesplittar osv. som påverkat priset på aktien. Det är adjusted vi kommer betrakta som priset för aktien. 
+
+Observera att det inte finns observationer för varje dag, utan vissa dagar hoppas över. Detta beror på att aktier inte kan handlas under helgdagar. Vi antar då att det senaste pris från föregående dag är konstant. Vi går vidare genom att lägga ihop dataframen för sentiment och priserna samt justerar de värden som fattas på helger osv. Se tabell 5 för den fullständiga tabellen med sentimentvärden och aktiepris för varje dag.
+
+```{r, echo=FALSE}
+stock_prices <- stock_prices %>%
+  select(date, price = adjusted)
+
+stock_df <- stock_df %>%
+  left_join(stock_prices, by = "date") %>%
+  fill(price)
+
+stock_df %>%
+  slice(1:10) %>%
+  kable()
+```
+
+__Tabell  5:__ Tabell med sentimentvärde och aktiepris för varje dag.
+
+
+```{r, include=FALSE}
+#Plots the normalized sentiment over time, with a smoothing graph aswell. The smoothing function uses
+#a "loess" model (a form of moving average).'
+
+#(Normalized Sentiment)
+stock_df %>%
+  mutate(AverageSentiment = (AverageSentiment - mean(stock_df$AverageSentiment))/sd(stock_df$AverageSentiment)) %>%
+  ggplot(aes(x = date, y = AverageSentiment)) + geom_line() + geom_smooth(se = FALSE) +
+  labs(title="Sentiment (normaliserat)", y="Sentimentvärde", x="Datum")
+```
+
+Med den data vi har nu, kan vi plotta priset samt sentimentet över tid för att se om det finns några trender. Vi behöver då skala upp sentimenten eftersom de har ett avsevärt lägre värde jämfört med priset. Grafen för sentimentvärdet kan då inte kopplas till värdet på y-axeln men vi kan iallafall se hur den beteer sig i relation till priset. Se figur 2 som visualiserar aktiepriset samt det skalade sentimentvärdet över tid.
+
+```{r}
+#Plots the stock price and sentiment over time with a scaled sentiment.
+stock_df %>%
+  mutate(AverageSentiment = 600*AverageSentiment)%>%
+  pivot_longer(-date, names_to = "source", values_to = "price") %>%
+  ggplot(aes(x=date, y = price, color=source)) + geom_line() +
+  labs(title="Aktiepris och sentiment", y="Pris", x="Datum", color="Källa")
+``` 
+
+__Figur 2:__ Plot för NVIDIAs aktiepris och skalat sentiment över tid.
+
+För att göra det ännu tydligare att se sambandet, kan vi färglägga de delar av aktieprisets kurva som har ett sentimentvärde större än medelvärdet. Se figur 3 nedan där vi kan se att det positiva sentimentet i början av intervallet tyder på en uppgång i aktiepriset. Efter uppgången verkar både priset och sentimentet för aktien ha stagnerat, de går varken upp eller ned. Enligt plotten ser vi även att aktien verkar ha både små uppgångar med negativt(lågt) sentiment och nedgångar med positivt(högt) sentiment. Det verkar alltså som att det inte går att dra några slutsatser angående prisets riktning med hjälp av sentimentet på kort sikt.
+
+```{r}
+#Plots the stock price with color to identify when the sentiment is above average.
+stock_df %>%
+  ggplot(aes(x = date, y=price, color=(AverageSentiment > mean(AverageSentiment)))) + 
+  geom_line(aes(group=1)) + 
+  labs(title = "Aktiepris och sentiment", x = "Datum", y = "'Pris", color = "Högre sentiment \nän vanligt")
+``` 
+
+__Figur 3:__ Plot för NVIDIAs aktiepris i samband med sentiment över tid.
+
+Se nu figur 4 där vi delat in grafen i två perioder, innan september 2020 och efter. Vi kan då grovt klassificera perioderna som en uppgångsfas och en "stagnationsfas" där aktien är i uppgång respektive står still. I period 2 verkar det inte som att priset och sentimentet har något märkbart samband. I den perioden går ju heller inte aktien varken upp eller ned särskilt mycket. I period 1 verkar vi dock i stor grad ha positiva sentimentvärden, samtidigt som aktien faktiskt är i en uppgång. I slutet av period 1 har vi några negativa sentiment. Vi kan spekulera och säga att de beror på att folk kanske tycker aktien är övervärderad och uttrycker sig negativt om priset. Hursomhelst  
+
+```{r}
+stock_df %>%
+  mutate(period = ifelse(date < as.Date("2020-09-01"), "1", "2")) %>%
+  ggplot(aes(x = date, y=price, color=(AverageSentiment > mean(AverageSentiment)))) + 
+  geom_line(aes(group=1)) + 
+  facet_wrap(~period, scales = "free_x") +
+  labs(title = "Aktiepris och sentiment", x = "Datum", y = "'Pris", color = "Högre sentiment \nän vanligt")
+```
+
+__Figur 4:__ Plot för NVIDIAs pris och sentiment över tid, uppdelat i två perioder. 
+
+
+
+## Diskussion
+
+Jag tycker att resulatet blev intressant. Vi visade att i detta fall, verkar det finnas något samband mellan sentimentet och aktiepriset, vilket också var förväntat. Det finns dock många förbättringsmöjligheter med analysen. Vi skulle kunna analysera fler aktier, se på en längre tidsperiod, använda fler källor (Exempelvis Twitter, media etc.) och beräkna sentiment värdet med större precision. Jag tycker främst att det skulle vara intressant att se hur sambandet sett ut under en lite längre tidsperiod. Det skulle även vara intressant att se hur sentimentet såg ut i början av 2020, när pandemin utvecklades. Viktigt att tilläga är att jag här mer eller mindre försökt förklara aktieprisets utveckling med sentimentets utveckling. Jag vågar dock inte uttala mig om det skulle gå att prediktera priset med hjälp av sentimentet.  
+
+
+
+## Referenser 
+_[1]:_ Chung-Chi Chen, Hen-Hsen Huang and Hsin-Hsi Chen. 2018. NTUSD-Fin: A Market Sentiment Dictionary for Financial Social Media Data Applications. In Proceedings of the 1st Financial Narrative Processing Workshop, 7 May 2018, Miyazaki, Japan.
+

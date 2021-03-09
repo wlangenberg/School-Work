@@ -1,0 +1,69 @@
+<style>
+
+.gdbar img {
+  width: 100px !important;
+  height: 80px !important;
+  margin: 8px 8px;
+}
+
+.gdbar {
+  width: 190px !important;
+  height: 100px !important;
+}
+
+slides > slide:not(.nobackground):before {
+  width: 70px;
+  height: 60px;
+  background-size: 70px 60px;
+}
+
+slides > slide {
+  color: #002F5F;
+}
+
+text { 
+ color: #002F5F;		
+}
+
+.boxed {
+  border: 1px solid  ;
+  padding: 10px ;
+  background: #002F5F ;
+  margin: 10px ;
+  color: white;
+}
+
+.title-slide hgroup h1 {
+  font-size: 65px;
+  line-height: 1.4;
+  letter-spacing: -3px;
+  color: #002F5F;
+}
+
+slides > slide.dark {
+  background: #002F5F !important;
+}
+
+h2 {
+  font-size: 45px;
+  line-height: 65px;
+  letter-spacing: -2px;
+  color: #002F5F;
+}
+
+h3 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  line-height: 2;
+  font-weight: inherit;
+  color: #002F5F;
+}
+
+small {
+    font-size: 10px;
+}
+
+<style>
+.forceBreak { -webkit-column-break-after: always; break-after: column; }
+</style>
+</style>

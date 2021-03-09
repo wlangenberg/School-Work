@@ -1,0 +1,142 @@
+---
+title: "Sentiment analys av en aktie"
+author: "Willie Langenberg"
+date: "2021-01-13"
+output:
+  ioslides_presentation:
+    logo: SU_logo_CMYK.png
+    incremental: TRUE
+    css: slides.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(jsonlite)
+library(httr)
+library(tidyquant)
+library(knitr)
+```
+
+```{r, echo=FALSE}
+#Laddar den sparade stocktwits datan
+load("../data/NVDA_data_1.RData")
+load("../data/NVDA_data_2.RData")
+load("../data/NVDA_data_3.RData")
+stock_df_raw <- stock_df %>%
+  bind_rows(stock_df_2, stock_df_3) %>%
+  select(id, word = body, created_at) %>%
+  mutate(date = str_split(created_at, "T", simplify = TRUE)[,1]) %>%
+  arrange(id)
+
+#Läser in sentiment ordlistan
+# NTUSD-Fin: A Market Sentiment Dictionary for Financial Social Media Data Applications
+# http://nlg.csie.ntu.edu.tw/nlpresource/NTUSD-Fin/
+sent_df_raw <- fromJSON("../data/NTUSD_Fin_word_v1.0.json")
+sent_df <- sent_df_raw %>%
+  select(word = token, sentiment = market_sentiment)
+```
+
+```{r, echo=FALSE}
+# Using the dictionary (sent_df) to calculate sentiment of messages (stock_df)
+
+stock_df_avgmessage <- stock_df_raw %>%
+  mutate(date = as.Date(date)) %>%
+  separate_rows(word) %>%
+  mutate(word = str_to_lower(word, locale = "en")) %>%
+  mutate(word = str_remove(word, pattern = "[[:punct:]]")) %>%
+  inner_join(sent_df, by=c("word" = "word")) %>%
+  group_by(id, created_at, date) %>%
+  summarize(AverageSentiment = mean(sentiment), .groups = 'drop')
+
+stock_df <- stock_df_avgmessage %>%
+  group_by(date) %>%
+  summarize(AverageSentiment = mean(AverageSentiment), .groups = 'drop')
+```
+
+```{r, echo=FALSE}
+#We use the function "tq_get" from tidyquant to retrieve stock price data.
+stock_prices <- tq_get('NVDA',
+               from = min(stock_df$date),
+               to = max(stock_df$date),
+               get = "stock.prices")
+```
+
+```{r, echo=FALSE}
+stock_prices <- stock_prices %>%
+  select(date, price = adjusted)
+
+stock_df <- stock_df %>%
+  left_join(stock_prices, by = "date") %>%
+  fill(price)
+
+```
+
+## Introduktion
+
+* Inledning
+
+
+* Metod
+
+
+## Data
+
+- Stocktwits kommentarer
+- Ordlista med sentimentvärde
+- Aktie prisdata
+
+## Ordlista med sentimentvärden
+
+Sentiment ordlista
+
+```{r, echo = FALSE}
+sent_df %>%
+  slice(1:4) %>%
+  kable()
+```
+
+## Sentiment över tid
+
+Plot av sentimentet över tid
+
+```{r, echo, FALSE}
+stock_df %>%
+  ggplot(aes(x = date, y = AverageSentiment)) + geom_line() + geom_smooth(se = FALSE) +
+  labs(title="Sentiment", y="Sentimentvärde", x="Datum")
+```
+
+## Exempel på negativa sentiment
+
+![Från: [Stocktwits](https://stocktwits.com/message/268804819)](../data/scrshot/pic_1.png)
+
+![Från: [Stocktwits](https://stocktwits.com/message/253566258)](../data/scrshot/pic_2.png)
+
+## Exempel på positiva sentiment
+
+![Från: [Stocktwits](https://stocktwits.com/message/237686104)](../data/scrshot/pic_4.png)
+
+![Från: [Stocktwits](https://stocktwits.com/message/251538781)](../data/scrshot/pic_5.png)
+
+## Aktiedata
+
+Tabell för aktiedata över given period.
+
+```{r}
+stock_prices %>%
+  slice(1:8) %>%
+  kable()
+```
+
+## Aktiedata och sentimentvärde
+
+Plot som visar aktiedatan över tid, indelat i två perioder.
+
+```{r, echo=FALSE}
+stock_df %>%
+  mutate(period = ifelse(date < as.Date("2020-09-01"), "1", "2")) %>%
+  ggplot(aes(x = date, y=price, color=(AverageSentiment > mean(AverageSentiment)))) + 
+  geom_line(aes(group=1)) + 
+  facet_wrap(~period, scales = "free_x") +
+  labs(title = "Aktiepris och sentiment", x = "Datum", y = "'Pris", color = "Högre sentiment \nän vanligt")
+```
