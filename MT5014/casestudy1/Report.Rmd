@@ -1,16 +1,20 @@
 ---
 title: "Case Study 1"
 author: "Willie Langenberg"
-date: '2021-01-14'
+date: '2021-02-28'
 output:
+  github_document: default
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(knitr)
+library(car)
+library(lmtest)
 ```
 
 ## Exercise 1
@@ -31,18 +35,25 @@ model_ord <- model$order
 # Parameters of the model
 coeff <- model$ar
 ```
-The best amount of lags to use according to AIC is then `r model_ord`. The parameters in the fitted AR(3) model is `r coeff`.
+
+The best amount of lags to use according to AIC is then `r model_ord`. The parameters in the fitted AR(3) model are `r coeff`.
 
 
 \newpage
 ## Exercise 2
 
-Given the data for U.S. quarterly real gross domestic product from 1947 to 2010, we are now going to test the null hypothesis 
-$$H_0 : \rho_1 = \rho_2 = \dotsc = \rho_{12} = 0 $$ 
-against the alternative hypothesis 
-$$H_1 : \rho_i \neq 0 \textrm{ for some } i \in \{ 1,\dotsc,12 \}.$$
+Given the data for U.S. quarterly real gross domestic product from 1947 to 2010, we are now going to test the null hypothesis  
+
+![equation](https://latex.codecogs.com/gif.latex?H_0%20%3A%20%5Crho_1%20%3D%20%5Crho_2%20%3D%20%5Cdotsc%20%3D%20%5Crho_%7B12%7D%20%3D%200)  
+
+against the alternative hypothesis  
+
+![equation](https://latex.codecogs.com/gif.latex?H_1%20%3A%20%5Crho_i%20%5Cneq%200%20%5Ctextrm%7B%20for%20some%20%7D%20i%20%5Cin%20%5C%7B%201%2C%5Cdotsc%2C12%20%5C%7D.)  
+
 We do this by using the Ljung-Box test. The test statistic is given by 
-$$Q = n(n+2)\sum_{k=1}^h \frac{\hat{\rho}_k^2}{n-k},$$ 
+
+![equation](https://latex.codecogs.com/gif.latex?Q%20%3D%20n%28n&plus;2%29%5Csum_%7Bk%3D1%7D%5Eh%20%5Cfrac%7B%5Chat%7B%5Crho%7D_k%5E2%7D%7Bn-k%7D%2C) 
+
 where $n$ is the number of observations, $\hat{\rho}$ is the autocorrelation at lag $k$, and $h$ is the number of lags being tested. Under the null hypotheis, $Q$ asymptotically follows a $\chi^2(h)$ distribution.
 
 ```{r, echo=FALSE}
@@ -59,35 +70,150 @@ growth_rate <- diff(log_gdp)
 Box.test(growth_rate, lag=12, type='Ljung') 
 ```
 
-With our data the $Q$ statistic is $62.848$. The p-value of the test is very small (<0.0001%), so we can safely reject the null hypothesis. This suggests that the quarterly growth rate of the GDP is serially correlated. 
+With our data the $Q$ statistic is $62.848$. The p-value of the test is very small (<0.0001%), so we can safely reject the null hypothesis. This suggests that the quarterly growth rate of the GDP is serially correlated.  
 
+```{r, echo=FALSE}
+gdp_model_1 <- ar(growth_rate, method="mle")
+gdp_model_1$order # An AR(3) is selected based on AIC
+gdp_model_2 <- arima(growth_rate,order=c(3,0,0)) # Estimation
 
-```{r}
-# Simple AR model ->
-model2 <- ar(growth_rate, AIC=TRUE, method="mle", order.max = 5)
-model2
-
-# Perform model checking to justify your model ->
-
+p.values <- format((1-pnorm(abs(gdp_model_2$coef)/sqrt(diag(gdp_model_2$var.coef))))*2, scientific = FALSE)
 ```
-###  ###
 
-Interpret the results!
+Now we will build a simple AR model for the data. We choose the amount of lags corresponding to the lowest AIC value. For our data, 3-lags gave the lowest AIC. The estimates for this model is given by:
 
-Build a suitable AR model, and perform model checking.
+`r kable(gdp_model_2$coef, col.names="")`
+
+```{r, echo=FALSE}
+box_test_1 <- Box.test(gdp_model_2$residuals, lag=12, type='Ljung')
+
+box_test_1_stat <- box_test_1$statistic
+```
+
+Before choosing this model we want to perform some model checking to see if the model is adequate. If the model is adequate the residuals should behave like white noise, which we can test by the Ljung-Box statistics. The statistic is given by $Q(m)$ as before, which follows a chi-squared distribution with (m-g) degrees of freedom. The value of the statistic is $Q(12) =$ 
+`r box_test_1_stat` 
+which follows a $\chi^2(9)$ distribution. The p-value is then `r 1-pchisq(box_test_1_stat,9)`. The p-value exceeds any critical level and we can therefore reject the null hypothesis, suggesting we have no serial correlation for the residuals. Further, we can also test if the estimates are significantly different from zero. We calculate the p-values to 
+
+`r kable(p.values, col.names = c("p-values"))`
+
+All estimates are shown to be significantly different from zero on the $5\%$ level. Hence, the model is now considered to be adequate.
 
 ### ###
 
 
 ## Exercise 3
 
-```{r}
-
-
-```
-
 ### Exercise 3.1
 
+```{r, echo=FALSE}
+bwa_df <- read_delim("bwa.txt", delim="\t", col_types = cols())
+```
+
+```{r, echo=FALSE}
+model_1 <- lm(LOGSAL ~ EDUC + LOGSALBEGIN, data=bwa_df)
+
+design_matrix <- bwa_df %>% 
+  mutate(b_1 = 1) %>% 
+  select(b_1, b_2 = EDUC, b_3 = LOGSALBEGIN) %>%
+  as.matrix()
+  
+s2 <- sum(model_1$residuals^2)/(nrow(bwa_df)-3)
+
+std_b <- sqrt(diag(s2*solve(t(design_matrix) %*% design_matrix)))
+
+model_sum <- tibble(parameter = "", estimate=0,std=0,.rows=3)
+
+model_sum[,1] <- c("b_1", "b_2", "b_3") 
+model_sum[,2] <- model_1$coefficients
+model_sum[,3] <- std_b
+```
+
+
+We have access to a dataset containing wages and other data for 474 employess of US bank. We consider a regression model given by:
+
+![equation](https://latex.codecogs.com/gif.latex?Y_j%20%3D%20%5Cbeta_1%20&plus;%20%5Cbeta_2E_j%20&plus;%20%5Cbeta_3B_j%20&plus;%20%5Cepsilon_j%2C%20j%20%3D1%2C%5Cdotsc%2Cn%2C)
+
+
+where Y corresponds to the logarithm of the employees current salary, E corresponds to EDUC, the number of finished education years and B corresponds to the logarithm of the salary each employee started with at the bank. We estimate the parameters of this model by solving the equation 
+
+![equation](https://latex.codecogs.com/gif.latex?%5Chat%7B%5Cbeta%7D%20%3D%20%28X%5ETX%29%5E%7B-1%7DX%5ETy.)
+
+Here we consider X to be the design matrix with every row corresponding to a employee, the first column contains 1's, the second contains the number of education years for every employee and so on. Further, we calculate the variance of the estimated $\beta$-parameters as 
+
+![equation](https://latex.codecogs.com/gif.latex?%5Chat%7BV%7D%28%5Chat%7B%5Cbeta%7D%29%20%3D%20s%5E2%28X%5ETX%29%5E%7B-1%7D%2C)
+
+where $s^2$ corresponds to the estimated sample variance given by 
+
+![equation](https://latex.codecogs.com/gif.latex?s%5E2%20%3D%20%5Cfrac%7Be%5ETe%7D%7Bn-k%7D%2C)
+
+where $e^te$ corresponds to the sum of the squared residuals and $k$ is the number of estimated parameters, 3.  
+
+This gives us the estimated parameters and standard deviations:
+
+`r kable(model_sum)`
+
+We continue by now calculating the coefficient of determination R^2^ by 
+
+![equation](https://latex.codecogs.com/gif.latex?R%5E2%20%3D%201-%20%5Cfrac%7BRSS%7D%7BTSS%7D%2C)
+
+which is calculated to $R^2=$ `r summary(model_1)$r.squared`, and the adjusted R^2^ is calculated as 
+
+![equation](https://latex.codecogs.com/gif.latex?%5Cbar%7BR%7D%5E2%3D%201%20-%20%5Cfrac%7BRSS/%28n-k%29%7D%7BTSS/%28n-1%29%7D%2C)
+
+which is calcualted to $\bar{R}^2=$ `r summary(model_1)$adj.r.squared`. We have a high R^2^ meaning the model fit to the data relatively good. Notice that the adjusted R^2^ is slightly lower, because it punishes the model for additional variables, which means it can never be larger than the regular R^2^. 
+
+We can control our calculations by using the R Summary function giving
+
+```{r, echo=FALSE}
+summary(model_1)
+```
+
+```{r, echo=FALSE}
+white_df <- bwa_df %>% mutate(e_j = model_1$residuals^2)
+white_ols <- lm(e_j ~ EDUC + LOGSALBEGIN + I(EDUC^2) + I(LOGSALBEGIN^2) + I(EDUC*LOGSALBEGIN), data=white_df)
+
+nR.2 <- nrow(white_df)*summary(white_ols)$r.squared
+nr2p <- pchisq(nR.2, df=5, lower.tail = FALSE)
+```
+
+Now we want to test for heteroskedasticity. We do this with White's test, having the null hypothesis of homoscedasticity. The method of this test is to regress the residuals on the explanatory variables and their squares and cross products. We start by fitting the model 
+
+![equation](https://latex.codecogs.com/gif.latex?%5Cepsilon_j%5E2%20%3D%20%5Clambda_1%20&plus;%20%5Clambda_2X_%7B2j%7D%20&plus;%20%5Clambda_3X_%7B3j%7D%20&plus;%20%5Clambda_4X_%7B2j%7D%5E2%20&plus;%20%5Clambda_5X_%7B3j%7D%5E2%20&plus;%20%5Clambda_6X_%7B2j%7DX_%7B3j%7D%20&plus;%20u_j%2C)
+
+whereas on the null hypothesis, $nR^2$ is asymptotically distributed as $\chi^2(5)$. We calculate the $nR^2$ to `r nR.2`, with the corresponding p-value `r nr2p`. The null hypothesis is barely not rejected at the $5\%$ level. We reject the null hypothesis which means that we have heterskedasticity in the model.
+
+To test for autocorrelation we use the Durbin-Watson's test. This test results in
+```{r, echo=FALSE}
+dwtest(model_1)
+```
+hence we reject the null hypothesis of no autocorrelation. 
 
 ### Exercise 3.2
 
+Now we are going to include gender and minority as additional explanatory variables. We fit this new model to our data which gives us the summary  
+
+```{r, echo=FALSE}
+model_2 <- lm(LOGSAL ~ EDUC + LOGSALBEGIN + GENDER + MINORITY, data=bwa_df)
+
+summary(model_2)
+```
+  
+Notice that when including these new explanatory variables in the model the estimates also changes for the first two explanatory variables. This most likely comes from correlation among the explanatory variables. An intuitive way to think about is with an simple example. If we have data corresponding to a straight line and we try to fit only one variable, the intercept, we might first have a positive intercept. However, when adding another variable, the x-coordinate of every observation, we might get a negative intercept and a much better fit to data. This principle applies when having more variables aswell.  
+
+```{r, echo=FALSE}
+rss.unrestricted <- sum(model_2$residuals^2)
+rss.restricted <- sum(model_1$residuals^2)
+F_model <- ((rss.restricted-rss.unrestricted)/2)/(rss.unrestricted/(nrow(bwa_df)-5))
+
+F_model_p <- pf(F_model, 2, nrow(bwa_df)-5,lower.tail = FALSE)
+```
+
+We move on with testing the joint significance of GENDER and MINORITY. We have fitted both a model with and without them so we can easily use restricted/unrestricted regression method to test this. The unrestricted model is the last model including gender and minority and the restricted model is the first model without them. We test this using the F-statistic 
+
+![equation](https://latex.codecogs.com/gif.latex?F%20%3D%20%5Cfrac%7B%28RSS_r-RSS_u%29/q%7D%7BRSS_u/%28n-k%29%7D%2C)
+
+where $RSS_r$ is the residual sum of squares of the restricted model, $q$ is the number of restrictions imposed and $k$ is the number of parameters estimated in the unrestricted model. The F-statistic in our case is `r F_model` which is F(2, 469)-distributed. The p-value is then `r F_model_p`, which means that we reject the null hypothesis of the restricted model. This means that the additional variables added in the new model is not significant.  
+
+Further we now want to test whether the coefficient for education is different from zero. In both our models we can see from the summaries that education was significantly different from zero with p-values lower than $0.1\%$. From this I conclude that education is very important when it comes to salary, which is really no surprise.  
+
+We can also test the significance of the regression, meaning that the null hypothesis is that all estimates of the explanatory variables is zero. The "restricted" model would then be just the intercept, that simply equals the mean of the response variable. This test is also automatically calculated in the summaries. In all models we have p-values less than $0.01\%$.
