@@ -3,4 +3,4 @@
 ## Projects written in python
 The questions and instructions are given in english, but the solutions are written in Swedish.
 
-- [Project 1:](project_1/project_1.md) Insurance Mathematics.
+- [Project 1:](project_1/project_1.md) Life Insurance.
