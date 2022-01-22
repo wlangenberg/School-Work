@@ -7,4 +7,4 @@ A handful of different assignments and reports of which I solved during my time 
 
 - [DA5011:](/MT5011/README.md) Introduction to Insurance Mathematics - Solved basic projects regarding insurance mathematics.
 
-- [MT7038:](/MT7038/README.md) Statistical Learning - Solved theoretical and practical project assignments. 
+- [MT7038:](/MasterMT7038/README.md) Statistical Learning - Solved theoretical and practical project assignments. 
