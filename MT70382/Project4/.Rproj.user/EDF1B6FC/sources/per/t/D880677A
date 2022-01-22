@@ -1,0 +1,32 @@
+{
+    "id": "D880677A",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1639426864129.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "expression": "white_wine_df",
+        "caption": "white_wine_df",
+        "totalObservations": 4898,
+        "displayedObservations": 4898,
+        "variables": 12,
+        "cacheKey": "DC19135B",
+        "object": "white_wine_df",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=white_wine_df&cache_key=DC19135B&max_cols=50",
+        "preview": 0
+    },
+    "folds": "",
+    "lastKnownWriteTime": 3700581345004319585,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1639426864129,
+    "read_only": false,
+    "read_only_alternatives": []
+}

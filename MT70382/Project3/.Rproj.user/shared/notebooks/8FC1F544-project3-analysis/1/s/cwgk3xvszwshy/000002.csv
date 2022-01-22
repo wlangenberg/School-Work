@@ -1,0 +1,7 @@
+"0","load(""svm_gridsearch4.RData"")"
+"0","svm_gridsearch4$results %>%         "
+"0","  mutate(cverror = 1-Accuracy, se = sd(cverror)/sqrt(10)) %>% "
+"0","  ggplot(aes(x=C, y= cverror)) + theme_minimal() + "
+"0","  geom_line(color=""darkblue"") + "
+"0","  geom_errorbar(aes(ymin=cverror-se, ymax=cverror+se), color=""orange"") + "
+"0","  xlab(""C"") + ylab(""CV Error"")"
