@@ -14,7 +14,6 @@ echo ""
 
 grep -o 'fp.2.Luci_02H12.ctg.ctg7180000019650' *.txt | sort | uniq -c
 
-#Also works: for f in *.txt; do echo "$f:"; grep -w "fp.2.Luci_02H12.ctg.ctg7180000019650" $f | wc -l; done;
 
 echo ""
 echo ""
