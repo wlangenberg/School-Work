@@ -10,3 +10,5 @@ A handful of different assignments and reports of which I solved during my time 
 - [MT7038:](/MasterMT7038/README.md) Statistical Learning - Solved theoretical and practical project assignments. 
 
 - [MT7038:](/MasterMT7042/README.md) Statistical Deep Learning - This course introduces basic as well as modern concepts of statistical learning in terms of artificial neural networks (deep learning), with applications in statistical data analysis. 
+
+- [Bachelor thesis:](/BachelorThesis/README.md) My bachelor's thesis in mathematical statistics. 
