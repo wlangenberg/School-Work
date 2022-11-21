@@ -8,3 +8,5 @@ A handful of different assignments and reports of which I solved during my time 
 - [DA5011:](/MT5011/README.md) Introduction to Insurance Mathematics - Solved basic projects regarding insurance mathematics.
 
 - [MT7038:](/MasterMT7038/README.md) Statistical Learning - Solved theoretical and practical project assignments. 
+
+- [MT7038:](/MasterMT7042/README.md) Statistical Deep Learning - This course introduces basic as well as modern concepts of statistical learning in terms of artificial neural networks (deep learning), with applications in statistical data analysis. 
